@@ -1,5 +1,4 @@
 import { Status } from '@repo/design-system/components/status';
-import { env } from '@repo/env';
 import Link from 'next/link';
 
 export const Footer = () => {
@@ -17,10 +16,10 @@ export const Footer = () => {
           title: 'Blog',
           href: '/blog',
         },
-        {
-          title: 'Docs',
-          href: env.NEXT_PUBLIC_DOCS_URL,
-        },
+        // {
+        //   title: 'Docs',
+        //   href: env.NEXT_PUBLIC_DOCS_URL,
+        // },
       ],
     },
     {
