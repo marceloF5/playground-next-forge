@@ -8,6 +8,10 @@ import type {
 import { log } from '@logtail/next';
 import { analytics } from '@repo/design-system/lib/analytics/server';
 import { env } from '@repo/env';
+import {
+  captureException,
+  withServerActionInstrumentation,
+} from '@sentry/nextjs';
 import { headers } from 'next/headers';
 import { Webhook } from 'svix';
 
@@ -140,86 +144,93 @@ const handleOrganizationMembershipDeleted = (
 };
 
 export const POST = async (request: Request): Promise<Response> => {
-  // Get the headers
-  const headerPayload = await headers();
-  const svixId = headerPayload.get('svix-id');
-  const svixTimestamp = headerPayload.get('svix-timestamp');
-  const svixSignature = headerPayload.get('svix-signature');
+  return await withServerActionInstrumentation(
+    'Webhook Callback Clerk',
+    { recordResponse: true },
+    async () => {
+      // Get the headers
+      const headerPayload = await headers();
+      const svixId = headerPayload.get('svix-id');
+      const svixTimestamp = headerPayload.get('svix-timestamp');
+      const svixSignature = headerPayload.get('svix-signature');
 
-  // If there are no headers, error out
-  if (!svixId || !svixTimestamp || !svixSignature) {
-    return new Response('Error occured -- no svix headers', {
-      status: 400,
-    });
-  }
+      if (!svixId || !svixTimestamp || !svixSignature) {
+        // If there are no headers, error out
+        return new Response('Error occured -- no svix headers', {
+          status: 400,
+        });
+      }
 
-  // Get the body
-  const payload = (await request.json()) as object;
-  const body = JSON.stringify(payload);
+      // Get the body
+      const payload = (await request.json()) as object;
+      const body = JSON.stringify(payload);
 
-  // Create a new SVIX instance with your secret.
-  const wh = new Webhook(env.CLERK_WEBHOOK_SECRET);
+      // Create a new SVIX instance with your secret.
+      const wh = new Webhook(env.CLERK_WEBHOOK_SECRET);
 
-  // eslint-disable-next-line no-undef-init
-  let event: WebhookEvent | undefined;
+      // eslint-disable-next-line no-undef-init
+      let event: WebhookEvent | undefined;
 
-  // Verify the payload with the headers
-  try {
-    event = wh.verify(body, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature,
-    }) as WebhookEvent;
-  } catch (error) {
-    log.error('Error verifying webhook:', { error });
-    return new Response('Error occured', {
-      status: 400,
-    });
-  }
+      // Verify the payload with the headers
+      try {
+        event = wh.verify(body, {
+          'svix-id': svixId,
+          'svix-timestamp': svixTimestamp,
+          'svix-signature': svixSignature,
+        }) as WebhookEvent;
+      } catch (error) {
+        log.error('Error verifying webhook:', { error });
+        captureException(error);
+        return new Response('Error occured', {
+          status: 400,
+        });
+      }
 
-  // Get the ID and type
-  const { id } = event.data;
-  const eventType = event.type;
+      // Get the ID and type
+      const { id } = event.data;
+      const eventType = event.type;
 
-  log.info('Webhook', { id, eventType, body });
+      log.info('Webhook', { id, eventType, body });
 
-  let response: Response = new Response('', { status: 201 });
+      let response: Response = new Response('', { status: 201 });
 
-  switch (eventType) {
-    case 'user.created': {
-      response = handleUserCreated(event.data);
-      break;
+      switch (eventType) {
+        case 'user.created': {
+          response = handleUserCreated(event.data);
+          break;
+        }
+        case 'user.updated': {
+          response = handleUserUpdated(event.data);
+          break;
+        }
+        case 'user.deleted': {
+          response = handleUserDeleted(event.data);
+          break;
+        }
+        case 'organization.created': {
+          response = handleOrganizationCreated(event.data);
+          break;
+        }
+        case 'organization.updated': {
+          response = handleOrganizationUpdated(event.data);
+          break;
+        }
+        case 'organizationMembership.created': {
+          response = handleOrganizationMembershipCreated(event.data);
+          break;
+        }
+        case 'organizationMembership.deleted': {
+          response = handleOrganizationMembershipDeleted(event.data);
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+
+      await analytics.shutdown();
+
+      return response;
     }
-    case 'user.updated': {
-      response = handleUserUpdated(event.data);
-      break;
-    }
-    case 'user.deleted': {
-      response = handleUserDeleted(event.data);
-      break;
-    }
-    case 'organization.created': {
-      response = handleOrganizationCreated(event.data);
-      break;
-    }
-    case 'organization.updated': {
-      response = handleOrganizationUpdated(event.data);
-      break;
-    }
-    case 'organizationMembership.created': {
-      response = handleOrganizationMembershipCreated(event.data);
-      break;
-    }
-    case 'organizationMembership.deleted': {
-      response = handleOrganizationMembershipDeleted(event.data);
-      break;
-    }
-    default: {
-      break;
-    }
-  }
-
-  await analytics.shutdown();
-
-  return response;
+  );
 };
