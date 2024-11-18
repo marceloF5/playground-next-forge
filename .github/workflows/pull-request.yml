@@ -1,0 +1,60 @@
+name: Pull Request Workflow
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - '**'
+
+jobs:
+  verify-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          # Aqui você coloca seus comandos de teste
+          npm install
+          npm test
+
+  check-approvals:
+    runs-on: ubuntu-latest
+    # Só executa em PRs, não em pushes diretos
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check pull request reviews
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            const approved = reviews.some(review => review.state === 'APPROVED');
+            if (!approved) {
+              core.setFailed('Pull request needs at least one approval');
+            }
+
+  vercel-deploy:
+    needs: [verify-pr, check-approvals]
+    runs-on: ubuntu-latest
+    # Só executa se for um PR e não um push direto
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+
+
+          VERCEL_TOKEN=ku41gPJbZCyemnO7HijZpNrt
+          

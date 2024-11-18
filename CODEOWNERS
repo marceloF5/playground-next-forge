@@ -1,0 +1,30 @@
+* @marcelof5
+
+# Apps
+/apps/api/ @marcelof5
+/apps/app/ @marcelof5
+/apps/docs/ @marcelof5
+/apps/email/ @marcelof5
+/apps/studio/ @marcelof5
+/apps/web/ @marcelof5
+
+# Packages
+/packages/database/ @marcelof5
+/packages/design-system/ @marcelof5
+/packages/email-templates/ @marcelof5
+/packages/env/ @marcelof5
+/packages/feature-flags/ @marcelof5
+/packages/next-config/ @marcelof5
+/packages/typescript-config/ @marcelof5
+
+# Settings files
+*.json @marcelof5
+tsconfig.* @marcelof5
+.env.* @marcelof5
+
+# CI/CD e DevOps
+/.github/ @marcelof5
+docker* @marcelof5
+
+# Documentations
+*.md @marcelof5
